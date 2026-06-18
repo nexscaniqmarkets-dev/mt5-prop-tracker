@@ -1,0 +1,48 @@
+{
+  "broker_settings": [
+    {
+      "id": 2,
+      "login": "389456",
+      "password": "••••••••••••",
+      "server": "FusionMarkets-Demo",
+      "updated_at": "2026-06-18T14:42:50.119Z"
+    }
+  ],
+  "evaluation_rules": [
+    {
+      "id": 1,
+      "phase": 1,
+      "initial_balance": 5000,
+      "profit_target": 400,
+      "daily_drawdown_limit": 5,
+      "max_drawdown_limit": 10,
+      "min_trading_days": 3,
+      "max_profit_limit": 3,
+      "daily_cutoff_hour": 0
+    }
+  ],
+  "account_state": [
+    {
+      "id": 1,
+      "balance": 5000,
+      "equity": 5000,
+      "margin": 0,
+      "free_margin": 5000,
+      "peak_balance": 5000,
+      "start_of_day_balance": 5000,
+      "last_sync_time": "2026-06-18T07:48:59.000Z"
+    }
+  ],
+  "open_positions": [],
+  "closed_trades": [],
+  "daily_stats": [
+    {
+      "date": "2026-06-18",
+      "start_balance": 5000,
+      "end_balance": 5000,
+      "has_traded": 0
+    }
+  ],
+  "breach_events": [],
+  "sandbox_simulation_enabled": false
+}

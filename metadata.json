@@ -1,0 +1,6 @@
+{
+  "name": "MT5 Prop Tracker",
+  "description": "Fusion Markets MT5 personal trading performance tracker with Funding Pips style evaluation metrics",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
