@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, CheckSquare, BarChart3, Settings } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, BarChart3, Settings, Calculator } from 'lucide-react';
 
 interface BottomNavProps {
   activeTab: string;
@@ -10,6 +10,7 @@ export default function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'trades', label: 'Trades', icon: CheckSquare },
+    { id: 'calculator', label: 'Calculator', icon: Calculator },
     { id: 'statistics', label: 'Statistics', icon: BarChart3 },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
