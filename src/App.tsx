@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Trades from './pages/Trades';
 import Statistics from './pages/Statistics';
 import Settings from './pages/Settings';
+import PositionCalculator from './pages/PositionCalculator';
 import { DashboardState } from './types';
 import { CheckCircle, AlertCircle, Info, Sparkles } from 'lucide-react';
 
@@ -248,6 +249,9 @@ export default function App() {
         )}
         {activeTab === 'statistics' && (
           <Statistics state={dashboardState} />
+        )}
+        {activeTab === 'calculator' && (
+          <PositionCalculator state={dashboardState} />
         )}
         {activeTab === 'settings' && (
           <Settings 

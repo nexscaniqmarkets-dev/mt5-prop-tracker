@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   TrendingUp, TrendingDown, Clock, ShieldAlert, BadgeInfo, 
-  PlusCircle, RefreshCw, XCircle, ChevronRight, Activity, Zap
+  RefreshCw, ChevronRight, Activity, Zap
 } from 'lucide-react';
 import { DashboardState, Position } from '../types';
 
@@ -14,46 +14,7 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ state, onRefresh, onClosePosition, onAckBreach, setActiveTab }: DashboardProps) {
-  const [submitting, setSubmitting] = useState(false);
-  const [symbol, setSymbol] = useState('EURUSD');
-  const [type, setType] = useState<'BUY' | 'SELL'>('BUY');
-  const [lotSize, setLotSize] = useState(0.5);
-  const [entryPrice, setEntryPrice] = useState(1.0850);
-  const [showQuickTrade, setShowQuickTrade] = useState(false);
-
   const { metrics, openPositions, rules, broker, breachAlerts } = state;
-
-  // Handles updating default entry price suggestion based on symbol
-  const handleSymbolChange = (sym: string) => {
-    setSymbol(sym);
-    if (sym === 'EURUSD') setEntryPrice(1.08520);
-    else if (sym === 'GBPUSD') setEntryPrice(1.26540);
-    else if (sym === 'USDJPY') setEntryPrice(155.82);
-    else if (sym === 'XAUUSD') setEntryPrice(2345.50);
-  };
-
-  const handleCreateTrade = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      const response = await fetch('/api/trades/open', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol, type, entry_price: entryPrice, lot_size: lotSize })
-      });
-      const data = await response.json();
-      if (data.success) {
-        onRefresh();
-        setShowQuickTrade(false);
-      } else {
-        alert(data.error || 'Failed to open position');
-      }
-    } catch (err: any) {
-      alert(err.message || 'Error occurred');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -162,12 +123,6 @@ export default function Dashboard({ state, onRefresh, onClosePosition, onAckBrea
         </div>
         <div className="flex gap-2 w-full md:w-auto shrink-0">
           <button 
-            onClick={() => setShowQuickTrade(!showQuickTrade)}
-            className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-950/30 transition-all active:scale-95 cursor-pointer"
-          >
-            <PlusCircle className="w-4 h-4" /> Place Demo Trade
-          </button>
-          <button 
             onClick={onRefresh}
             className="flex items-center justify-center p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition duration-200 cursor-pointer"
             title="Manual Sync MT5"
@@ -176,81 +131,6 @@ export default function Dashboard({ state, onRefresh, onClosePosition, onAckBrea
           </button>
         </div>
       </div>
-
-      {/* Quick Interactive Order Placing modal/form in desktop dashboard */}
-      {showQuickTrade && (
-        <form onSubmit={handleCreateTrade} className="bg-slate-900/90 border border-blue-500/20 rounded-2xl p-5 space-y-4 animate-fadeIn">
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-sm font-bold text-slate-200">MT5 Rapid Order Execution (Demo Terminal)</span>
-            <button type="button" onClick={() => setShowQuickTrade(false)} className="text-slate-400 hover:text-white">
-              <XCircle className="w-5 h-5" />
-            </button>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-400 mb-1">Trading Asset</label>
-              <select 
-                value={symbol}
-                onChange={(e) => handleSymbolChange(e.target.value)}
-                className="w-full text-xs font-bold text-white bg-slate-800 border border-slate-700 rounded-lg p-2 focus:border-blue-500 outline-none"
-              >
-                <option value="EURUSD">EURUSD (Euro / Dollar)</option>
-                <option value="GBPUSD">GBPUSD (Pound / Dollar)</option>
-                <option value="XAUUSD">XAUUSD (Spot Gold / USD)</option>
-                <option value="USDJPY">USDJPY (Dollar / Yen)</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-400 mb-1">Action Type</label>
-              <div className="flex bg-slate-800 rounded-lg p-0.5 border border-slate-700">
-                <button 
-                  type="button" 
-                  onClick={() => setType('BUY')}
-                  className={`flex-1 text-center py-1.5 text-xs font-bold rounded-md transition duration-150 ${type === 'BUY' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}
-                >
-                  BUY
-                </button>
-                <button 
-                  type="button" 
-                  onClick={() => setType('SELL')}
-                  className={`flex-1 text-center py-1.5 text-xs font-bold rounded-md transition duration-150 ${type === 'SELL' ? 'bg-red-600 text-white' : 'text-slate-400'}`}
-                >
-                  SELL
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-400 mb-1">Volume (Lots)</label>
-              <input 
-                type="number" 
-                step="0.01" 
-                min="0.01"
-                max="10"
-                value={lotSize} 
-                onChange={(e) => setLotSize(parseFloat(e.target.value) || 0.1)}
-                className="w-full text-xs font-bold text-white bg-slate-800 border border-slate-700 rounded-lg p-2 focus:border-blue-500 outline-none font-mono"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-400 mb-1">Execution Price (USD)</label>
-              <input 
-                type="number" 
-                step="0.00001" 
-                value={entryPrice} 
-                onChange={(e) => setEntryPrice(parseFloat(e.target.value) || 1.10)}
-                className="w-full text-xs font-bold text-white bg-slate-800 border border-slate-700 rounded-lg p-2 focus:border-blue-500 outline-none font-mono"
-              />
-            </div>
-          </div>
-          <button 
-            type="submit" 
-            disabled={submitting}
-            className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-lg transition duration-150 active:scale-95 cursor-pointer"
-          >
-            {submitting ? 'Executing Command...' : 'Submit Real-time Order Ticket'}
-          </button>
-        </form>
-      )}
 
       {/* 3. Account Balance Statistics Board */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3" id="prop_summary_cards">
@@ -420,9 +300,7 @@ export default function Dashboard({ state, onRefresh, onClosePosition, onAckBrea
               <BadgeInfo className="w-6 h-6 mx-auto text-slate-500" />
               <p className="text-xs font-semibold text-slate-300">No open trades on MetaTrader 5 server at this time.</p>
               <p className="text-[10px] text-slate-500">
-                {!state.sandboxSimulationEnabled 
-                  ? "Direct MT5 integration mode is active. Tap below to download the live background sync script."
-                  : "Tap 'Place Demo Trade' above to create ticks manually for calculations."}
+                Direct MT5 integration mode is active. Trades placed on your Fusion Markets MT5 account will appear here automatically.
               </p>
             </div>
             

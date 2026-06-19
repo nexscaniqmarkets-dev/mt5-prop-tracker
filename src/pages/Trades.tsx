@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Filter, Calendar, Activity, CheckSquare, Download, Trash, RefreshCw } from 'lucide-react';
+import { Search, Filter, Calendar, Activity, CheckSquare, Download, Trash, RefreshCw, BookOpen } from 'lucide-react';
 import { DashboardState, ClosedTrade, Position } from '../types';
 
 interface TradesProps {
@@ -8,11 +8,61 @@ interface TradesProps {
   onClosePosition: (id: string) => Promise<void>;
 }
 
+const JOURNAL_TAGS = [
+  { value: '', label: 'No tag' },
+  { value: 'followed_plan', label: '✅ Followed Plan' },
+  { value: 'good_entry', label: '🎯 Good Entry' },
+  { value: 'revenge_trade', label: '⚠️ Revenge Trade' },
+  { value: 'fomo', label: '⚠️ FOMO Entry' },
+  { value: 'early_exit', label: '⏱️ Exited Early' },
+  { value: 'overleveraged', label: '⚠️ Overleveraged' },
+];
+
 export default function Trades({ state, onRefresh, onClosePosition }: TradesProps) {
   const { openPositions, closedTrades, rules } = state;
   const [searchTerm, setSearchTerm] = useState('');
   const [symbolFilter, setSymbolFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
+  const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [tagDraft, setTagDraft] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+
+  const openJournalEditor = (trade: ClosedTrade) => {
+    if (expandedTradeId === trade.id) {
+      setExpandedTradeId(null);
+      return;
+    }
+    setExpandedTradeId(trade.id);
+    setNoteDraft(trade.journal_note || '');
+    setTagDraft(trade.journal_tag || '');
+  };
+
+  const saveJournalNote = async (tradeId: string) => {
+    setSavingNote(true);
+    try {
+      const response = await fetch('/api/trades/journal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: tradeId, note: noteDraft, tag: tagDraft })
+      });
+      const data = await response.json();
+      if (data.success) {
+        await onRefresh();
+        setExpandedTradeId(null);
+      } else {
+        alert(data.error || 'Failed to save journal note');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error occurred');
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const getTagLabel = (tagValue?: string) => {
+    return JOURNAL_TAGS.find(t => t.value === tagValue)?.label || null;
+  };
 
   // Find unique symbols from all trades to populate filter dropdown dynamically
   const uniqueSymbols = React.useMemo(() => {
@@ -177,11 +227,22 @@ export default function Trades({ state, onRefresh, onClosePosition }: TradesProp
                 {filteredClosedTrades.map((trade) => {
                   const isProfit = trade.pnl >= 0;
                   const maxProfitExceeded = trade.pnl >= rules.initial_balance * (rules.max_profit_limit / 100);
+                  const isExpanded = expandedTradeId === trade.id;
+                  const tagLabel = getTagLabel(trade.journal_tag);
                   return (
-                    <tr key={trade.id} className="hover:bg-slate-800/10 transition duration-150">
+                    <React.Fragment key={trade.id}>
+                    <tr
+                      onClick={() => openJournalEditor(trade)}
+                      className="hover:bg-slate-800/10 transition duration-150 cursor-pointer"
+                    >
                       <td className="py-3 font-mono">
                         <span className="text-[10px] text-slate-500 block">#{trade.id}</span>
                         <span className="text-slate-200 mt-0.5 block font-bold">{trade.symbol}</span>
+                        {(trade.journal_note || tagLabel) && (
+                          <span className="flex items-center gap-1 text-[9px] text-blue-400 mt-1">
+                            <BookOpen className="w-2.5 h-2.5" /> {tagLabel || 'Noted'}
+                          </span>
+                        )}
                       </td>
                       <td className="py-3">
                         <span className={`px-2 py-0.5 text-[10px] font-bold rounded ${trade.type === 'BUY' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
@@ -208,6 +269,54 @@ export default function Trades({ state, onRefresh, onClosePosition }: TradesProp
                         <span className="block text-[9px] text-slate-600">Opened: {formatDate(trade.open_time)}</span>
                       </td>
                     </tr>
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={6} className="bg-slate-900/60 p-4">
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Tag this trade</label>
+                              <select
+                                value={tagDraft}
+                                onChange={(e) => setTagDraft(e.target.value)}
+                                className="w-full text-xs font-bold text-white bg-slate-800 border border-slate-700 rounded-lg p-2 outline-none focus:border-blue-500"
+                              >
+                                {JOURNAL_TAGS.map(t => (
+                                  <option key={t.value} value={t.value}>{t.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Journal note</label>
+                              <textarea
+                                value={noteDraft}
+                                onChange={(e) => setNoteDraft(e.target.value)}
+                                placeholder="What was your reasoning? What would you do differently?"
+                                rows={3}
+                                className="w-full text-xs text-white bg-slate-800 border border-slate-700 rounded-lg p-2 outline-none focus:border-blue-500 resize-none"
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => saveJournalNote(trade.id)}
+                                disabled={savingNote}
+                                className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition active:scale-95"
+                              >
+                                {savingNote ? 'Saving...' : 'Save Note'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setExpandedTradeId(null)}
+                                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
