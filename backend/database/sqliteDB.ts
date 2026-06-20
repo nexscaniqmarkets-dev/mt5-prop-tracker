@@ -1,13 +1,13 @@
-import path from 'path';
-import fs from 'fs';
+import { MongoClient, Db } from 'mongodb';
 
-const DB_DIR = path.join(process.cwd(), 'database');
-const JSON_DB_PATH = path.join(DB_DIR, 'tracker_db.json');
+const MONGO_URI = process.env.MONGODB_URI || '';
+const DB_NAME = 'mt5tracker';
+const COLLECTION_NAME = 'tracker_state';
+const DOC_ID = 'singleton';
 
-// Ensure db directory exists
-if (!fs.existsSync(DB_DIR)) {
-  fs.mkdirSync(DB_DIR, { recursive: true });
-}
+let mongoClient: MongoClient | null = null;
+let mongoDb: Db | null = null;
+let mongoConnected = false;
 
 interface BrokerSettings {
   id: number;
@@ -62,6 +62,8 @@ interface ClosedTrade {
   pnl: number;
   open_time: string;
   close_time: string;
+  journal_note?: string;
+  journal_tag?: string;
 }
 
 interface DailyStats {
@@ -207,11 +209,26 @@ function initializeDefaults() {
   saveDatabase();
 }
 
-function loadDatabase() {
+export async function connectAndLoad() {
+  if (!MONGO_URI) {
+    console.error('⚠️ MONGODB_URI not set. Falling back to in-memory only (data will NOT persist between deploys).');
+    initializeDefaults();
+    return;
+  }
+
   try {
-    if (fs.existsSync(JSON_DB_PATH)) {
-      const content = fs.readFileSync(JSON_DB_PATH, 'utf-8');
-      dbData = JSON.parse(content);
+    mongoClient = new MongoClient(MONGO_URI);
+    await mongoClient.connect();
+    mongoDb = mongoClient.db(DB_NAME);
+    mongoConnected = true;
+    console.log('✅ Connected to MongoDB Atlas');
+
+    const collection = mongoDb.collection(COLLECTION_NAME);
+    const existing = await collection.findOne({ _id: DOC_ID as any });
+
+    if (existing) {
+      const { _id, ...rest } = existing as any;
+      dbData = rest as DataStore;
       if (!dbData.broker_settings) dbData.broker_settings = [];
       if (!dbData.evaluation_rules) dbData.evaluation_rules = [];
       if (!dbData.account_state) dbData.account_state = [];
@@ -219,25 +236,29 @@ function loadDatabase() {
       if (!dbData.closed_trades) dbData.closed_trades = [];
       if (!dbData.daily_stats) dbData.daily_stats = [];
       if (!dbData.breach_events) dbData.breach_events = [];
-      console.log('JSON DB loaded successfully.');
+      console.log(`✅ Loaded tracker state from MongoDB (${dbData.closed_trades.length} closed trades, ${dbData.open_positions.length} open positions)`);
     } else {
       initializeDefaults();
+      saveDatabase();
+      console.log('✅ No existing data found. Initialized fresh defaults and saved to MongoDB.');
     }
   } catch (err) {
-    console.error('Error loading JSON DB, using transient state:', err);
+    console.error('❌ MongoDB connection failed, falling back to in-memory only:', err);
+    mongoConnected = false;
     initializeDefaults();
   }
 }
 
 function saveDatabase() {
-  try {
-    fs.writeFileSync(JSON_DB_PATH, JSON.stringify(dbData, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('Error writing JSON DB:', err);
+  // Fire-and-forget: don't block callers, but log failures
+  if (!mongoConnected || !mongoDb) {
+    return;
   }
+  const collection = mongoDb.collection(COLLECTION_NAME);
+  collection
+    .updateOne({ _id: DOC_ID as any }, { $set: dbData }, { upsert: true })
+    .catch(err => console.error('❌ Error saving to MongoDB:', err));
 }
-
-loadDatabase();
 
 // Keep serialize function to match standard layout
 export const dbConnection = {
@@ -667,16 +688,41 @@ export async function syncRealOpenPositions(positions: any[]) {
 }
 
 export async function syncRealClosedTrades(trades: any[]) {
-  dbData.closed_trades = trades.map(trade => ({
-    id: String(trade.id || Math.floor(1000000 + Math.random() * 9000000)),
-    symbol: String(trade.symbol),
-    type: String(trade.type || 'BUY'),
-    entry_price: Number(trade.entry_price || trade.entryPrice),
-    exit_price: Number(trade.exit_price || trade.exitPrice),
-    lot_size: Number(trade.lot_size || trade.lotSize),
-    pnl: Number(trade.pnl),
-    open_time: String(trade.open_time || trade.openTime || new Date().toISOString()),
-    close_time: String(trade.close_time || trade.closeTime || new Date().toISOString())
-  }));
+  // Preserve existing journal notes/tags when EA re-syncs trade data
+  const existingNotes = new Map<string, { note?: string; tag?: string }>();
+  dbData.closed_trades.forEach(t => {
+    if (t.journal_note || t.journal_tag) {
+      existingNotes.set(t.id, { note: t.journal_note, tag: t.journal_tag });
+    }
+  });
+
+  dbData.closed_trades = trades.map(trade => {
+    const id = String(trade.id || Math.floor(1000000 + Math.random() * 9000000));
+    const preserved = existingNotes.get(id);
+    return {
+      id,
+      symbol: String(trade.symbol),
+      type: String(trade.type || 'BUY'),
+      entry_price: Number(trade.entry_price || trade.entryPrice),
+      exit_price: Number(trade.exit_price || trade.exitPrice),
+      lot_size: Number(trade.lot_size || trade.lotSize),
+      pnl: Number(trade.pnl),
+      open_time: String(trade.open_time || trade.openTime || new Date().toISOString()),
+      close_time: String(trade.close_time || trade.closeTime || new Date().toISOString()),
+      journal_note: preserved?.note,
+      journal_tag: preserved?.tag
+    };
+  });
   saveDatabase();
+}
+
+export async function updateJournalNote(tradeId: string, note: string, tag: string) {
+  const trade = dbData.closed_trades.find(t => t.id === tradeId);
+  if (trade) {
+    trade.journal_note = note;
+    trade.journal_tag = tag;
+    saveDatabase();
+    return true;
+  }
+  return false;
 }

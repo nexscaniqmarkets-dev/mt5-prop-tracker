@@ -4,6 +4,7 @@ import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import apiRouter from './backend/routes/api.js';
 import { initMt5Bridge } from './backend/mt5/mt5Bridge.js';
+import * as db from './backend/database/sqliteDB.js';
 
 dotenv.config();
 
@@ -24,6 +25,9 @@ async function startServer() {
 
   // Mount API endpoints
   app.use('/api', apiRouter);
+
+  // Connect to MongoDB and load persisted tracker state before anything else
+  await db.connectAndLoad();
 
   // Initialize MT5 Core poller and metrics tracker
   await initMt5Bridge();
