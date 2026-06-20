@@ -43,7 +43,7 @@ export default function Header({ state, onRefresh, telegramUser }: HeaderProps) 
         <div>
           <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-400 block flex items-center gap-1">
             <Radio className="w-3 h-3 text-emerald-400" />
-            MT5 Fusion Markets LIVE
+            MT5 {state.broker?.server?.replace(/-?Demo/i, '').replace(/MT5/i, '').trim() || 'Broker'} LIVE
           </span>
           <h1 className="text-xs font-bold text-slate-100 flex items-center gap-1">
             {telegramUser ? `Hello, ${telegramUser.first_name || telegramUser.username}` : 'Democount Observer'}
