@@ -674,17 +674,23 @@ export async function updateAccountStateReal(balance: number, equity: number, ma
 
 export async function syncRealOpenPositions(positions: any[]) {
   dbData.open_positions = positions.map(pos => ({
-    id: String(pos.id || Math.floor(10000000 + Math.random() * 90000000)),
-    symbol: String(pos.symbol),
+    id: String(pos.id || pos.ticket || Math.floor(10000000 + Math.random() * 90000000)),
+    symbol: String(pos.symbol || 'UNKNOWN'),
     type: String(pos.type || 'BUY'),
-    entry_price: Number(pos.entry_price || pos.entryPrice || 0),
-    current_price: Number(pos.current_price || pos.currentPrice || pos.entryPrice || 0),
-    lot_size: Number(pos.lot_size || pos.lotSize || 0.01),
-    unrealized_pnl: Number(pos.unrealized_pnl || pos.unrealizedPnl || 0),
-    pct_gain: Number(pos.pct_gain || pos.pctGain || 0),
+    entry_price: safeNum(pos.entry_price ?? pos.entryPrice),
+    current_price: safeNum(pos.current_price ?? pos.currentPrice ?? pos.entry_price ?? pos.entryPrice),
+    lot_size: safeNum(pos.lot_size ?? pos.lotSize, 0.01),
+    unrealized_pnl: safeNum(pos.unrealized_pnl ?? pos.unrealizedPnl),
+    pct_gain: safeNum(pos.pct_gain ?? pos.pctGain),
     open_time: String(pos.open_time || pos.openTime || new Date().toISOString())
   }));
   saveDatabase();
+}
+
+// Helper: convert to a safe finite number, falling back to 0 instead of NaN
+function safeNum(value: any, fallback: number = 0): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 export async function syncRealClosedTrades(trades: any[]) {
@@ -697,16 +703,17 @@ export async function syncRealClosedTrades(trades: any[]) {
   });
 
   dbData.closed_trades = trades.map(trade => {
-    const id = String(trade.id || Math.floor(1000000 + Math.random() * 9000000));
+    const id = String(trade.id || trade.ticket || Math.floor(1000000 + Math.random() * 9000000));
     const preserved = existingNotes.get(id);
+    const exitPrice = safeNum(trade.exit_price ?? trade.exitPrice);
     return {
       id,
-      symbol: String(trade.symbol),
+      symbol: String(trade.symbol || 'UNKNOWN'),
       type: String(trade.type || 'BUY'),
-      entry_price: Number(trade.entry_price || trade.entryPrice),
-      exit_price: Number(trade.exit_price || trade.exitPrice),
-      lot_size: Number(trade.lot_size || trade.lotSize),
-      pnl: Number(trade.pnl),
+      entry_price: safeNum(trade.entry_price ?? trade.entryPrice, exitPrice),
+      exit_price: exitPrice,
+      lot_size: safeNum(trade.lot_size ?? trade.lotSize, 0.01),
+      pnl: safeNum(trade.pnl),
       open_time: String(trade.open_time || trade.openTime || new Date().toISOString()),
       close_time: String(trade.close_time || trade.closeTime || new Date().toISOString()),
       journal_note: preserved?.note,
