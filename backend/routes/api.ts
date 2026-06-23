@@ -265,8 +265,27 @@ router.post('/sync/live-stats', async (req, res) => {
 // Webhook for real-time MT5 EA/Python script push
 router.post('/webhook/mt5', async (req, res) => {
   try {
-    const { balance, equity, margin, free_margin, open_positions, closed_trades } = req.body;
-    
+    const { account_login, account_server, balance, equity, margin, free_margin, open_positions, closed_trades } = req.body;
+
+    // 0. Detect account switch: if the EA reports a different login than what's stored,
+    //    automatically update the broker label and reset to a fresh baseline using the
+    //    account's current real balance.
+    if (account_login) {
+      const currentBroker = await db.get<any>('SELECT login, server, updated_at FROM broker_settings ORDER BY id DESC LIMIT 1');
+      const isNewAccount = !currentBroker || String(currentBroker.login) !== String(account_login);
+
+      if (isNewAccount) {
+        const freshBalance = balance !== undefined ? Number(balance) : 5000;
+        await db.run(
+          'INSERT INTO broker_settings (login, password, server, updated_at) VALUES (?, ?, ?, ?)',
+          [String(account_login), null, String(account_server || 'Unknown'), new Date().toISOString()]
+        );
+        await db.clearAllAccountData(freshBalance);
+        await db.setSandboxSimulationEnabled(false);
+        console.log(`🔄 Detected account switch to ${account_login} (${account_server}). Auto-reset to fresh baseline at $${freshBalance}.`);
+      }
+    }
+
     // 1. Update primary parameters
     const targetBalance = balance !== undefined ? Number(balance) : undefined;
     const targetEquity = equity !== undefined ? Number(equity) : targetBalance;
@@ -297,6 +316,24 @@ router.post('/webhook/mt5', async (req, res) => {
   } catch (error: any) {
     console.error('Webhook payload parsing error:', error);
     res.status(500).json({ error: 'Failed to process webhook payloads: ' + error.message });
+  }
+});
+
+// Journal: save a note/tag on a closed trade
+router.post('/trades/journal', async (req, res) => {
+  try {
+    const { id, note, tag } = req.body;
+    if (!id) {
+      return res.status(400).json({ error: 'Trade id is required' });
+    }
+    const success = await db.updateJournalNote(String(id), note || '', tag || '');
+    if (success) {
+      res.json({ success: true, message: 'Journal entry saved' });
+    } else {
+      res.status(404).json({ error: 'Trade not found' });
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
